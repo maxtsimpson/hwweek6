@@ -17,16 +17,36 @@ SO THAT I can plan a trip accordingly
 ```
 GIVEN a weather dashboard with form inputs
 WHEN I search for a city
+    make a search input field and search button
+    add an event listener for clicking the search button
 THEN I am presented with current and future conditions for that city and that city is added to the search history
+    on search click:
+        add the city to the search history list
+        call a store recent serach function
+            Define a storeRecentSearch function that:
+            stores the search in local storage
+        call a searchCity function
+            Define a searchCity funtion that:
+            calls the api with the city
+            on success calls the render weather info function
 WHEN I view current weather conditions for that city
 THEN I am presented with the city name, the date, an icon representation of weather conditions, the temperature, the humidity, the wind speed, and the UV index
+    Define a renderWeather function that:
+        maps the api object we get back to the fields we are expecting to render
+        populate the main card at the top of the page
+        dynamically create a card per day in the 5 day forecast
 WHEN I view the UV index
 THEN I am presented with a color that indicates whether the conditions are favorable, moderate, or severe
+    write in if condition in the render function to change the class attribute on the UV display, use the bootswatch classes
 WHEN I view future weather conditions for that city
 THEN I am presented with a 5-day forecast that displays the date, an icon representation of weather conditions, the temperature, and the humidity
 WHEN I click on a city in the search history
 THEN I am again presented with current and future conditions for that city
+    add an event listener for the unordered list and use event delegation for the on click
+        the on click should call the searchCity function
 ```
+Define an OnInit function that retrieves the search History on page load.
+could also add some default behaviour that it uses geolocation from the browser to load weather for that users city by default
 
 The following image demonstrates the application functionality:
 
