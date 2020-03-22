@@ -5,7 +5,7 @@ let currentCity = "";
 const APIKEY = "db7659b069972354627d855668ebaf95";
 const GEOAPIFYKEY = "d167547b4c204380b2554416dc375bc8";
 const LOCATIONIQKEY = "d8f0580573990c";
-const OPENUVKEY = "aaa5274f748d804b446f494b32315010";
+const OPENUVKEY = "aaa5274f748d804b446f494b32315010"; //limit of 50 reqs/day
 
 let getCurrentTime = function () {
     return moment().clone();
@@ -37,7 +37,7 @@ let storeRecentSearch = function (cityWeatherObject){
     
     //we are only going to store one weather report for one city at a time
     //no historical data or duplicates
-    console.log({cityWeatherObject});
+
     cityWeatherRepo[cityWeatherObject.Name.toLowerCase()] = cityWeatherObject;
     localStorage.setItem("cityWeatherRepo",JSON.stringify(cityWeatherRepo));
 }
@@ -49,7 +49,6 @@ let mapAPIWeatherToLocalWeather = function (cityWeatherDTO) {
 }
 
 let searchCityWeatherByAPI = async function(cityName){
-    console.log({cityName});
     
     //construct a request and search the api. then return the api weather object
     var queryURL = 
@@ -58,7 +57,6 @@ let searchCityWeatherByAPI = async function(cityName){
     "&units=metric" +
     "&appid=" + APIKEY
 
-    console.log({queryURL});
     // api.openweathermap.org/data/2.5/forecast/daily?q={city name}&cnt={cnt}&appid={your api key}
     //the only issue is the daily forecast needs a paid subscription, so we get a 3 hourly
 
@@ -82,8 +80,6 @@ let searchCityByAPI = async function(cityName){
     "&q=" + cityName +
     "&format=json&limit=1"
 
-    console.log({queryURL})
-
     $.ajax({
         url: queryURL,
         method: "GET"
@@ -92,16 +88,39 @@ let searchCityByAPI = async function(cityName){
 
 }
 
+let getCityNameFromCoordsByAPI = async function(latitude,longtitude){
+    
+    //https://us1.locationiq.com/v1/reverse.php?key=d8f0580573990c&lat=32.124&lon=116.005&format=json
+    var queryURL = "https://us1.locationiq.com/v1/reverse.php" +
+    "?key=" + LOCATIONIQKEY +
+    "&lat=" + latitude + "&lon=" + longtitude + 
+    "&format=json" + 
+    "&normalizecity"
+
+    $.ajax({
+        url: queryURL,
+        method: "GET"
+        })
+        .then(getCityNameFromResponse,null);
+
+
+}
+
+let getCityNameFromResponse = function(reverseGeocodeResponse){
+    let cityName = reverseGeocodeResponse.address.city
+    currentCity = cityName;
+    populatePage();
+}
+
 let getCityLongAndLatFromResponse = function(locationAPIResponse){
 
-    console.log({locationAPIResponse});
     if(locationAPIResponse[0].type === "city")
     {
         var longtitude = locationAPIResponse[0].lon;
         var latitude = locationAPIResponse[0].lat;
         getCityUVIndex(longtitude,latitude);
     } else {
-        alert("could not find the city you searched for")
+        renderUV(-1)
     }
 
 }
@@ -121,8 +140,6 @@ let getCityUVIndex = function(longtitude,latitude) {
     // ".json?" + 
     // "appid=" + APIKEY
 
-    // console.log({queryURL})
-
     // $.ajax({
     // url: queryURL,
     // method: "GET"
@@ -131,8 +148,6 @@ let getCityUVIndex = function(longtitude,latitude) {
 
     var queryURL = 
     "https://api.openuv.io/api/v1/uv?lat=" + latitude + '&lng=' + longtitude
-
-    console.log({queryURL})
 
     $.ajax({
     type: 'GET',
@@ -147,7 +162,6 @@ let getCityUVIndex = function(longtitude,latitude) {
 
 
 let getUVFromAjaxResponse = function(ajaxResponse){
-    console.log({ajaxResponse});
     var uvIndex = ajaxResponse.result.uv
     renderUV(uvIndex);
 }
@@ -162,9 +176,8 @@ let renderWeatherFromAjax = function(weatherAjaxResponse){
     var forecastArray = [];
     //create a local weather object from the weatherDTO
     weatherArray.forEach(element => {
-        console.log({element});
         forecast = {
-            "date": element,
+            "date": moment(element.dt_txt).format("dddd Do"),
             "temp": element.main.temp,
             "humidity": element.main.humidity,
             "weatherSummary": element.weather[0].main,
@@ -176,7 +189,6 @@ let renderWeatherFromAjax = function(weatherAjaxResponse){
         forecastArray.push(forecast);     
     });
 
-    console.log({forecastArray});
     renderForecastArray(forecastArray);
 
     var cardUpdatedText = $("<small>").text("Last updated: " + (new Date().toLocaleString())).addClass("text-muted p-3");
@@ -191,41 +203,33 @@ let renderWeatherFromAjax = function(weatherAjaxResponse){
 }
 
 let renderRecentSearch = function(cityName){
-    // console.log($("#search-history-list").each(function(){
-    //     if ($(this).text().toLowerCase() === cityName.toLowerCase()) {
-    //         $("#search-history-list").remove()       
-    //     }
-    // }));
 
-    $("#search-history-list").remove(":contains(cityName)")
+    $("#recent-search-" + cityName).remove()
+    var link = $("<a>").text(cityName).attr("href","#").addClass("mw-100 stretched-link p-sm-0").css({textTransform: "capitalize"})
+    var listItem = $("<li>").addClass("list-group-item").append(link).attr("id",("recent-search-" + cityName))
+    $("#search-history-list").prepend(listItem);
     
-    $("#search-history-list").prepend(
-        $("<li>").append($("<a>").text(cityName).attr("href","#").attr("id",cityName))
-        .addClass("list-group-item")
-    );
 }
 
 let renderForecastArray = function(forecastArray) {
-    console.log({forecastArray});
-    //empty any current cards
-
-
-    populateWeatherCard(forecastArray[0]);
+    
+    populateJumbotron(forecastArray[0]);
 
     $("#forecast-cards").empty();
     forecastArray.forEach(forecast => {
         addWeatherCard(forecast)    
     });
     $("#update-time").empty()
+
 }
 
 let addWeatherCard = function(forecast){
     //create a div that uses bootstraps card class using jquery
     var card = $("<div>").addClass("card border-primary bg-info mb-3");
-    var cardImage = $("<img>").attr("src",forecast.iconSrc).addClass("card-img-top img-fluid")
+    var cardImage = $("<img>").attr("src",forecast.iconSrc).addClass("card-img-top img-fluid").css({width: "100px", height: "auto"})
     var cardHeader = $("<div>").addClass("card-header");
     var cardBody = $("<div>").addClass("card-body");
-    var cardTitle = $("<h5>").addClass("card-title");
+    var cardTitle = $("<h5>").addClass("card-title text-white").text(forecast.date);
     var cardDesc = $("<p>").text(forecast.weatherDescription).addClass("card-text text-light");
     var cardTemp = $("<p>").text("Temp: " + forecast.temp).addClass("card-text text-light");
     var cardHumidity = $("<p>").text("Humidity: " + forecast.humidity + "%").addClass("card-text text-light");
@@ -243,70 +247,98 @@ let renderUV = function(uvIndex){
     // 0-3 low 3-6 high 6+ high to extreme. taken from https://www.openuv.io/uvindex#
     var uvIndexColour = null;
 
-    //uv index will be a decimal so need to check how that works with comparisons
-    //should also round it to 2 decimal places
-    
+    uvIndex = parseFloat(uvIndex.toFixed(2));
+
     switch (true) {
-        case (uvIndex > 0 && uvIndex <= 3):
+        case (uvIndex >= 0 && uvIndex <= 3):
                 //low
-                uvIndexColour = "#558B2F" 
+                uvIndexColour = "#558B2F";
             break;
     
-        case (uvIndex > 0 && uvIndex <= 3):
+        case (uvIndex > 3 && uvIndex <= 6):
                 //moderate
-                uvIndexColour = "#F9A825"
+                uvIndexColour = "#F9A825";
             break;
                 
-        case (uvIndex > 0 && uvIndex <= 3):
+        case (uvIndex > 6 && uvIndex <= 8):
                 //high
-                uvIndexColour = "#EF6C00"
+                uvIndexColour = "#EF6C00";
             break;
             
-        case (uvIndex > 0 && uvIndex <= 3):
+        case (uvIndex > 8 && uvIndex <= 11):
                 //very high
-                uvIndexColour = "#B71C1C"
+                uvIndexColour = "#B71C1C";
             break;
             
-        case (uvIndex > 0 && uvIndex <= 3):
+        case (uvIndex >= 11):
                 //extreme
-                uvIndexColour = "#6A1B9A"
+                uvIndexColour = "#6A1B9A";
             break;
+        case (uvIndex === -1):
+            //we were unable to retrieve the uv index
+            var alertDiv = $("<div>").addClass("alert alert-danger").text("Sorry we were unable to retrieve the uv index for this city");
+            $(".jumbotron").append(alertDiv);
+            return;
+        break;
         default:
             break;
     }
-
-    var jumboUVIndex = $("<p>").text("UV Index: " + uvIndex)
+    
+    var jumboUVIndex = $("<p>").text("UV Index: ");
+    var span = $("<span />").text(uvIndex.toString());
+    //give the uvindex text a background colour if we could retrieve one
     if( uvIndexColour !== null ){
-
+        span.css("background-color",uvIndexColour).addClass("text-white px-2 py-1");
     }
+    jumboUVIndex.append(span);
+
     $(".jumbotron").append(jumboUVIndex);
 }
 
-let populateWeatherCard = function (forecast) {
+let mapOpenWeatherDateTimeToDateString = function(openWeatherDTstring){
+
+}
+
+let populateJumbotron = function (forecast) {
     
     $(".jumbotron").empty()
 
+    var jumboTitle = $("<h3>").text(currentCity + " " + getCurrentTime().format("dddd Do MMM YYYY") + " " ).css({textTransform: "capitalize"})
+    var jumboImage = $("<img>").attr("src",forecast.iconSrc).css({width: "100px", height: "auto"})
     var jumboTemp = $("<p>").text("Temperature: " + forecast.temp + '\u00B0' + "C").addClass("");
     var jumboHumidity = $("<p>").text("Humidity: " + forecast.humidity + "%").addClass("");
-    var jumboWindSpeed = $("<p>").text("Wind Speed: " + forecast.windSpeed + "%").addClass("");
+    var jumboWindSpeed = $("<p>").text("Wind Speed: " + forecast.windSpeed + " meter/sec").addClass("");
     
-    $(".jumbotron").append(jumboTemp).append(jumboHumidity).append(jumboWindSpeed)
+    $(".jumbotron").append(jumboTitle).append(jumboImage).append(jumboTemp).append(jumboHumidity).append(jumboWindSpeed)
+}
+
+let successfulGeoLocation = function(pos){
+    getCityNameFromCoordsByAPI(pos.coords.latitude,pos.coords.longitude);
+}
+
+let populatePage = function(){
+    renderRecentSearch(currentCity);
+    searchCityWeatherByAPI(currentCity);
+    searchCityByAPI(currentCity);
 }
 
 $("#search-button").on("click",function(){
     currentCity = $("#search-term").val();
-    renderRecentSearch(currentCity);
-    searchCityByAPI(currentCity);
-    searchCityWeatherByAPI(currentCity);
+    populatePage();
 });
 
 $("#search-history-list").on("click",function(){
-    // console.log();
     currentCity = $(event.target).text();
-    renderRecentSearch(currentCity);
-    searchCityByAPI(currentCity);
-    searchCityWeatherByAPI(currentCity);
+    populatePage();
 });
 
-// var a = searchCityWeatherByAPI("perth");
-// console.log({a});
+let OnInit = function(){
+    navigator.geolocation.getCurrentPosition(successfulGeoLocation)
+    var cityWeatherRepo = retrieveRecentSearches()
+    for (cityWeather in cityWeatherRepo)
+    {
+        renderRecentSearch(cityWeather);
+    }
+}
+
+OnInit();
